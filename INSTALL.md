@@ -196,7 +196,7 @@ sudo apt-get install build-essential qt5-qmake qt5-default qttools5-dev-tools li
 
 **This means that you have to compile sqlcipher yourself, otherwise compiling qTox will fail.**
 ```bash
-sudo dnf group install "Development Tools"
+sudo dnf groupinstall "Development Tools"  (can also use sudo dnf install @"Development Tools")
 sudo dnf install qt-devel qt-doc qt-creator qt5-qtsvg qt5-qtsvg-devel openal-soft-devel libXScrnSaver-devel qrencode-devel ffmpeg-devel qtsingleapplication qt5-linguist gtk2-devel
 ```
 
@@ -366,9 +366,8 @@ The script will automatically download and install `toxcore` and `libfilteraudio
 ```
 If you've used script, you can skip directly to [compiling qTox](#compile-qtox).
 
-
 If you want to compile and install it manually:
-```bash
+```
 git clone https://github.com/irungentoo/filter_audio
 cd filter_audio
 make -j$(nproc)
@@ -379,7 +378,9 @@ sudo make install
 
 If you are not using Fedora, skip this section, and go directly to compiling [**toxcore**](#toxcore-compiling).
 
-```bash
+This method automatically detects whether to link statically or dynamically,
+depending on your system configs.
+```
 git clone https://github.com/sqlcipher/sqlcipher
 cd sqlcipher
 autoreconf -if
@@ -387,7 +388,30 @@ autoreconf -if
 make -j$(nproc)
 sudo make install
 cd ..
-````
+```
+If you wish to explictly link sqlcipher statically or dynamically use:
+
+#### Statically linked:
+```
+git clone https://github.com/sqlcipher/sqlcipher
+cd sqlpcipher
+./configure --enable-tempstore=yes CFLAGS="-DSQLITE_HAS_CODEC" \
+    LDFLAGS="/opt/local/lib/libcrypto.a"
+make
+sudo make install
+cd ..
+```
+
+#### Dynamically linked:
+```
+git clone https://github.com/sqlcipher/sqlcipher
+cd sqlcipher
+./configure --enable-tempstore=yes CFLAGS="-DSQLITE_HAS_CODEC" \
+    LDFLAGS="-lcrypto"
+make
+sudo make install
+cd ..
+```
 
 ### toxcore compiling
 
