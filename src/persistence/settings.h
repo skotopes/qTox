@@ -44,6 +44,8 @@ public:
     static Settings& getInstance();
     static void destroyInstance();
     QString getSettingsDirPath(); ///< The returned path ends with a directory separator
+    QString getAppDataDirPath(); ///< The returned path ends with a directory separator
+    QString getAppCacheDirPath(); ///< The returned path ends with a directory separator
 
     void createSettingsDir(); ///< Creates a path to the settings dir, if it doesn't already exist
     void createPersonal(QString basename); ///< Write a default personal .ini settings file for a profile
@@ -54,6 +56,14 @@ public:
     void loadGlobal();
     void loadPersonal();
     void loadPersonal(Profile *profile);
+
+    struct Request
+    {
+        QString address;
+        QString message;
+        bool read;
+    };
+
 
 public slots:
     void saveGlobal(); ///< Asynchronous
@@ -106,6 +116,21 @@ public:
     QString getTranslation() const;
     void setTranslation(QString newValue);
 
+    // Toxme
+    void deleteToxme();
+    void setToxme(QString name, QString server, QString bio, bool priv, QString pass = "");
+    QString getToxmeInfo() const;
+    void setToxmeInfo(QString info);
+
+    QString getToxmeBio() const;
+    void setToxmeBio(QString bio);
+    
+    bool getToxmePriv() const;
+    void setToxmePriv(bool priv);
+    
+    QString getToxmePass() const;
+    void setToxmePass(QString pass);
+    
     void setAutoSaveEnabled(bool newValue);
     bool getAutoSaveEnabled() const;
 
@@ -280,6 +305,14 @@ public:
     bool getCircleExpanded(int id) const;
     void setCircleExpanded(int id, bool expanded);
 
+    bool addFriendRequest(const QString &friendAddress, const QString &message);
+    unsigned int getUnreadFriendRequests() const;
+    Request getFriendRequest(int index) const;
+    int getFriendRequestSize() const;
+    void clearUnreadFriendRequests();
+    void removeFriendRequest(int index);
+    void readFriendRequest(int index);
+
     // Assume all widgets have unique names
     // Don't use it to save every single thing you want to save, use it
     // for some general purpose widgets, such as MainWindows or Splitters,
@@ -350,6 +383,12 @@ private:
     QString currentProfile;
     uint32_t currentProfileId;
 
+    // Toxme Info
+    QString toxmeInfo; // name@server
+    QString toxmeBio;
+    bool toxmePriv;
+    QString toxmePass;
+
     bool enableLogging;
 
     int autoAwayTime;
@@ -358,6 +397,8 @@ private:
     QHash<QString, QString> autoAccept;
     bool autoSaveEnabled;
     QString globalAutoAcceptDir;
+
+    QList<Request> friendRequests;
 
     // GUI
     QString smileyPack;

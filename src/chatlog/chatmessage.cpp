@@ -57,7 +57,7 @@ ChatMessage::Ptr ChatMessage::createChatMessage(const QString &sender, const QSt
     text = detectQuotes(detectAnchors(text), type);
 
     //markdown
-    if (Settings::getInstance().getMarkdownPreference() != MarkdownType::NONE)
+    if (Settings::getInstance().getMarkdownPreference() != NONE)
         text = detectMarkdown(text);
 
     switch(type)
@@ -183,7 +183,7 @@ void ChatMessage::hideDate()
 
 QString ChatMessage::detectMarkdown(const QString &str)
 {
-    QString out;
+    QString out = str;
 
     // Create regex for certain markdown syntax
     QRegExp exp("(\\*\\*)([^\\*\\*]{2,})(\\*\\*)"   // Bold    **text**
@@ -193,33 +193,23 @@ QString ChatMessage::detectMarkdown(const QString &str)
                 "|(\\-)([^\\-]{2,})(\\-)"           // Underline  -text-
                 "|(\\~)([^\\~]{2,})(\\~)"           // Strike  ~text~
                 "|(\\~~)([^\\~\\~]{2,})(\\~~)"      // Strike  ~~text~~
+                "|(\\`)([^\\`]{2,})(\\`)"           // Codeblock  `text`
                 );
 
-    // Support for multi-line text
-    QStringList messageLines = str.split("\n");
-    QStringList outLines;
-    for (int i = 0; i < messageLines.size(); ++i)
+    int offset = 0;
+    while ((offset = exp.indexIn(out, offset)) != -1)
     {
-        out = messageLines.at(i);
-        int offset = 0;
-        while ((offset = exp.indexIn(out, offset)) != -1)
+        QString snipCheck = out.mid(offset-1,exp.cap(0).length()+2);
+        QString snippet = exp.cap(0).trimmed();
+
+        QString htmledSnippet;
+
+        // Only parse if surrounded by spaces, newline(s) and/or beginning/end of line
+        if ((snipCheck.startsWith(' ') || snipCheck.startsWith('>') || offset == 0) && ((snipCheck.endsWith(' ') || snipCheck.endsWith('<')) || offset + snippet.toHtmlEscaped().length() == out.toHtmlEscaped().length()))
         {
-            QString snipCheck = out.mid(offset-1,exp.cap(0).length()+2);
-            QString snippet = exp.cap(0).trimmed();
-
-            QString htmledSnippet;
-
-            // Check for surrounding spaces and/or beginning/end of line
-            if (!((snipCheck.startsWith(' ') || offset == 0) && (snipCheck.endsWith(' ') || offset + snipCheck.trimmed().length() == out.length())))
-            {
-                offset += snippet.length();
-                continue;
-            }
-
             int mul = 0; // Determines how many characters to strip from markdown text
-
             // Set mul depending on markdownPreference
-            if (Settings::getInstance().getMarkdownPreference() == 2)
+            if (Settings::getInstance().getMarkdownPreference() == WITHOUT_CHARS)
                 mul = 2;
 
             // Match captured string to corresponding md format
@@ -237,58 +227,57 @@ QString ChatMessage::detectMarkdown(const QString &str)
                 htmledSnippet = QString(" <s>%1</s> ").arg(snippet.mid(mul/2,snippet.length()-mul));
             else if (exp.cap(19) == "~~" && snippet.length() > 4) // Strikethrough ~~text~~
                 htmledSnippet = QString(" <s>%1</s> ").arg(snippet.mid(mul,snippet.length()-2*mul));
+            else if (exp.cap(22) == "`" && snippet.length() > 2) // Codeblock `text`
+                htmledSnippet = QString("<font color=#595959><code>%1</code></font>").arg(snippet.mid(mul/2,snippet.length()-mul));
             else
                 htmledSnippet = snippet;
             out.replace(offset, exp.cap().length(), htmledSnippet);
             offset += htmledSnippet.length();
-        }
-        outLines.push_back(out);
+        } else
+            offset += snippet.length();
     }
-    return outLines.join("\n");
+
+    return out;
 }
 
 QString ChatMessage::detectAnchors(const QString &str)
 {
-    QString out;
+    QString out = str;
 
     // detect URIs
     QRegExp exp("("
                 "(?:\\b)((www\\.)|(http[s]?|ftp)://)" // (protocol)://(printable - non-special character)
                 // http://ONEORMOREALHPA-DIGIT
                 "\\w+\\S+)" // any other character, lets domains and other
-                "|(?:\\b)(file:///.*$)" //link to a local file, valid until the end of the line
-                "|(?:\\b)(tox:[a-zA-Z\\d]{76}$)" //link with full user address
+                // ↓ link to a file, or samba share
+                //   https://en.wikipedia.org/wiki/File_URI_scheme
+                "|(?:\\b)((file|smb)://)([\\S| ]*)"
+                "|(?:\\b)(tox:[a-zA-Z\\d]{76})" //link with full user address
                 "|(?:\\b)(mailto:\\S+@\\S+\\.\\S+)" //@mail link
                 "|(?:\\b)(tox:\\S+@\\S+)"); // starts with `tox` then : and only alpha-digits till the end
                 // also accepts tox:agilob@net as simplified TOX ID
-    //support for multi-line text
-    QStringList messageLines = str.split("\n");
-    QStringList outLines;
-    for (int i = 0; i < messageLines.size(); ++i)
+
+    int offset = 0;
+    while ((offset = exp.indexIn(out, offset)) != -1)
     {
-        out = messageLines.at(i);
-        int offset = 0;
-        while ((offset = exp.indexIn(out, offset)) != -1)
+        QString url = exp.cap();
+        // If there's a trailing " it's a HTML attribute, e.g. a smiley img's title=":tox:"
+        if (url == "tox:\"")
         {
-            QString url = exp.cap();
-            // If there's a trailing " it's a HTML attribute, e.g. a smiley img's title=":tox:"
-            if (url == "tox:\"")
-            {
-                offset += url.length();
-                continue;
-            }
-            QString htmledUrl;
-            // add scheme if not specified
-            if (exp.cap(2) == "www.")
-                htmledUrl = QString("<a href=\"http://%1\">%1</a>").arg(url);
-            else
-                htmledUrl = QString("<a href=\"%1\">%1</a>").arg(url);
-            out.replace(offset, exp.cap().length(), htmledUrl);
-            offset += htmledUrl.length();
+            offset += url.length();
+            continue;
         }
-        outLines.push_back(out);
+        QString htmledUrl;
+        // add scheme if not specified
+        if (exp.cap(2) == "www.")
+            htmledUrl = QString("<a href=\"http://%1\">%1</a>").arg(url);
+        else
+            htmledUrl = QString("<a href=\"%1\">%1</a>").arg(url);
+        out.replace(offset, exp.cap().length(), htmledUrl);
+        offset += htmledUrl.length();
     }
-    return outLines.join("\n");
+
+    return out;
 }
 
 QString ChatMessage::detectQuotes(const QString& str, MessageType type)
@@ -319,5 +308,5 @@ QString ChatMessage::detectQuotes(const QString& str, MessageType type)
 
 QString ChatMessage::wrapDiv(const QString &str, const QString &div)
 {
-    return QString("<div class=%1>%2</div>").arg(div, str);
+    return QString("<p class=%1>%2</p>").arg(div, /*QChar(0x200E) + */QString(str));
 }
